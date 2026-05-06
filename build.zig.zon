@@ -1,0 +1,30 @@
+.{
+    // In-progress Zig port of the CMake build. Currently only enough is
+    // wired up for the `clap-wrapper-shared-detail` static lib; plugin
+    // wrapper formats (VST3, AUv2, CLAP, standalone, WCLAP) still build
+    // through CMake. See build.zig and buildsupport/ for the port status.
+    .name = .clap_wrapper,
+    .version = "0.12.1",
+    .minimum_zig_version = "0.14.0",
+
+    // Replace the fingerprint by running `zig build` once with a stub value
+    // and pasting the suggestion Zig prints. We can't generate it offline.
+    .fingerprint = 0xdeadbeefdeadbeef,
+
+    // No dependencies declared yet. SDK locations (CLAP, VST3, AUv2) are
+    // supplied via `zig build -D<sdk>-sdk-root=/path/to/sdk` for now,
+    // matching the cmake `<SDK>_SDK_ROOT` cache variables. A follow-up PR
+    // will declare them as proper Zig package dependencies.
+    .dependencies = .{},
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "buildsupport",
+        "src",
+        "include",
+        "libs",
+        "cmake",
+        "tests",
+    },
+}
