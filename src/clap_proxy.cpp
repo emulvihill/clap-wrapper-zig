@@ -295,10 +295,15 @@ void Plugin::connectClap(const clap_plugin_t *clap)
     api = CLAP_WINDOW_API_X11;
 #endif
 
-    if (!_ext._gui->is_api_supported(_plugin, api, false))
+    bool supported = _ext._gui->is_api_supported(_plugin, api, false);
+#if LIN
+    // A wrapper may offer a second embedded transport on Linux (Wayland via
+    // the VST3 3.8 IWaylandHost path); keep the GUI when any transport works.
+    if (!supported) supported = _ext._gui->is_api_supported(_plugin, CLAP_WINDOW_API_WAYLAND, false);
+#endif
+    if (!supported)
     {
-      // disable GUI if the hosted plugin doesn't support this platform's
-      // expected window API
+      // disable GUI if no embedded transport is supported
       _ext._gui = nullptr;
     }
   }
@@ -606,6 +611,11 @@ const void *Plugin::clapExtension(const clap_host *host, const char *extension)
   if (!strcmp(extension, CLAP_EXT_POSIX_FD_SUPPORT)) return &HostExt::hostposixfd;
 #endif
 
+  if (host && host->host_data)
+  {
+    auto self = static_cast<Plugin *>(host->host_data);
+    if (self->_parentHost) return self->_parentHost->host_extension(extension);
+  }
   return nullptr;
 }
 
