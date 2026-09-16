@@ -146,6 +146,18 @@ tresult PLUGIN_API ClapAsVst3::initialize(FUnknown *context)
 {
   auto result = super::initialize(context);
   context->queryInterface(Vst::IHostApplication::iid, (void **)&vst3HostApplication);
+#if CLAP_WRAPPER_VST3_WAYLAND
+  if (vst3HostApplication)
+  {
+    Steinberg::IWaylandHost *wlhost = nullptr;
+    TUID wliid;
+    Steinberg::IWaylandHost::iid.toTUID(wliid);
+    if (vst3HostApplication->createInstance(wliid, wliid, (void **)&wlhost) == kResultOk && wlhost)
+    {
+      vst3WaylandHost = owned(wlhost);
+    }
+  }
+#endif
   if (result == kResultOk)
   {
     if (!_plugin)
@@ -439,6 +451,9 @@ IPlugView *PLUGIN_API ClapAsVst3::createView(FIDString /*name*/)
             (void)this;  // silence warning on non-linux
 #endif
           });
+#if CLAP_WRAPPER_VST3_WAYLAND
+      _wrappedview->setWaylandHost(vst3WaylandHost.get());
+#endif
     }
     return _wrappedview;
   }
@@ -1162,6 +1177,16 @@ bool ClapAsVst3::gui_can_resize()
 {
   // the plugin asks if the host can do a resize
   return (componentHandler2 != nullptr);
+}
+
+const void *ClapAsVst3::host_extension(const char *extension)
+{
+#if CLAP_WRAPPER_VST3_WAYLAND
+  return WrappedView::waylandHostExtension(vst3WaylandHost.get(), extension);
+#else
+  (void)extension;
+  return nullptr;
+#endif
 }
 
 bool ClapAsVst3::gui_request_resize(uint32_t width, uint32_t height)

@@ -91,6 +91,14 @@ class IHost
   virtual bool modify_fd(int fd, clap_posix_fd_flags_t flags) = 0;
   virtual bool unregister_fd(int fd) = 0;
 #endif
+
+  // Wrapper-specific host extensions. Consulted by the clap_host proxy's
+  // get_extension after the shared extensions; a wrapper answers only for the
+  // ids it implements and returns nullptr otherwise. Scoped to this instance.
+  virtual const void *host_extension(const char * /*extension*/)
+  {
+    return nullptr;
+  }
 };
 
 struct ClapPluginExtensions;

@@ -55,6 +55,32 @@ cmake -B build \
 ```
 If you'd like to also build for AUv2 include `-DCLAP_WRAPPER_BUILD_AUV2=ON` and the SDK in the folder `AudioUnitSDK`.
 
+## Wayland (Linux, VST3 3.8)
+
+VST3 3.8 hosts that run as Wayland compositors (for example Studio One /
+Fender Studio Pro) attach editors with `kPlatformTypeWaylandSurfaceID` and
+serve the connection through `IWaylandHost`. The VST3 wrapper can forward that
+attachment to a CLAP plugin. It is opt-in: define
+`CLAP_WRAPPER_WAYLAND_EMBED=1` on the `<target>-clap-wrapper-vst3-lib` target.
+
+CLAP does not yet define what `clap_window.ptr` holds for
+`CLAP_WINDOW_API_WAYLAND`, so the handoff is a wrapper extension declared in
+[`include/clapwrapper/wayland.h`](include/clapwrapper/wayland.h):
+
+- When the VST3 host provides `IWaylandHost`, the wrapper's `clap_host`
+  answers `get_extension(CLAP_HOST_WAYLAND_EMBED)` (`"clap.host-wayland-embed/0"`)
+  with a `clap_host_wayland_embed_t`. Otherwise the extension is absent.
+- On attach, the wrapper opens the host connection and calls `gui.create` and
+  `gui.set_parent` with api `CLAP_WINDOW_API_WAYLAND`, `floating = false`, and
+  `clap_window.ptr` pointing at a `clap_wayland_embed_t` carrying the
+  host-owned `wl_display*` and parent `wl_surface*` (from `IWaylandFrame`,
+  falling back to the `attached()` parent argument).
+- `removed()` destroys the plugin GUI and then closes the connection.
+
+A plugin should advertise `is_api_supported(CLAP_WINDOW_API_WAYLAND, false)`
+only when the host extension is present, attach a `wl_subsurface` to the
+parent, use its own event queue, and never disconnect the display.
+
 ## Licensing
 
 The `clap-wrapper` project is released under the MIT license.

@@ -303,6 +303,12 @@ class ClapAsVst3 : public Steinberg::Vst::SingleComponentEffect,
   IPtr<Steinberg::Vst::IComponentHandler3> componentHandler3 = nullptr;
   IPtr<Steinberg::Vst::IContextMenu> vst3ContextMenu = nullptr;
   IPtr<Steinberg::Vst::IHostApplication> vst3HostApplication = nullptr;
+#if CLAP_WRAPPER_VST3_WAYLAND
+  // VST3 3.8 Wayland connection service, created from IHostApplication in
+  // initialize(); nullptr on X11-only hosts. Probed before the CLAP plugin is
+  // created so its first is_api_supported query already sees the answer.
+  IPtr<Steinberg::IWaylandHost> vst3WaylandHost = nullptr;
+#endif
   std::string wrapper_hostname = "CLAP-As-VST3-Wrapper";
   std::vector<wrapper_context_menu_item> contextmenuitems;
   uint32_t vst3ContextMenuParamID = 0;
@@ -359,6 +365,7 @@ class ClapAsVst3 : public Steinberg::Vst::SingleComponentEffect,
   bool modify_fd(int fd, clap_posix_fd_flags_t flags) override;
   bool unregister_fd(int fd) override;
 #endif
+  const void *host_extension(const char *extension) override;
 
  public:
   //----from IPlugObject
