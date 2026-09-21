@@ -173,6 +173,11 @@ tresult PLUGIN_API ClapAsVst3::initialize(FUnknown *context)
 tresult PLUGIN_API ClapAsVst3::terminate()
 {
   vst3HostApplication.reset();
+#if CLAP_WRAPPER_VST3_WAYLAND
+  // Acquired from IHostApplication in initialize(); it must not outlive the
+  // host context that created it.
+  vst3WaylandHost.reset();
+#endif
 
   if (_plugin)
   {
