@@ -141,6 +141,9 @@ class WrappedView : public Steinberg::IPlugView,
                                   // answers the pre-attach rect so a host that
                                   // compares getSize against the request sees
                                   // a real change and resizes
+  bool _sizeAnsweredInRequest = false;  // the host answered our resizeView with
+                                        // its own onSize: that rect is already
+                                        // in _rect and outranks the request
 
 #if LIN
  public:

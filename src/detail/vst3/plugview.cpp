@@ -232,15 +232,18 @@ void WrappedView::apply_attached_size()
     // Hosts following the SDK reference (editorhost) compare getSize against
     // the requested rect and skip the window resize when they already match;
     // keep reporting the pre-attach rect until the request has been made.
+    _sizeAnsweredInRequest = false;
     _inRequestResize = true;
     _reportCachedSize = true;
     const bool ok = _plugFrame->resizeView(this, &fresh) == kResultOk;
     _reportCachedSize = false;
     _inRequestResize = false;
-    // A refused request must not be recorded as the size in force: _rect is
-    // what the next attach compares against, so keeping `fresh` here would
-    // make the retry look unnecessary and strand the host window.
-    if (!ok) return;
+    // Neither outcome may be recorded as the size in force. _rect is what the
+    // next attach compares against: keeping `fresh` after a refusal makes the
+    // retry look unnecessary and strands the host window, and keeping it after
+    // the host answered with its own onSize throws that answer away and makes
+    // the next attach re-ask for a size the host already settled.
+    if (!ok || _sizeAnsweredInRequest) return;
   }
   _rect = fresh;
 }
@@ -349,7 +352,10 @@ tresult PLUGIN_API WrappedView::onSize(ViewRect *newSize)
   if (!newSize) return kResultFalse;
 
   _rect = *newSize;
-  if (!_inRequestResize) _explicitSize = true;
+  if (_inRequestResize)
+    _sizeAnsweredInRequest = true;
+  else
+    _explicitSize = true;
   if (_created && _attached)
   {
     if (_extgui->can_resize(_plugin))
@@ -436,10 +442,14 @@ bool WrappedView::request_resize(uint32_t width, uint32_t height)
 
   if (_plugFrame)
   {
+    _sizeAnsweredInRequest = false;
     _inRequestResize = true;
     const bool ok = _plugFrame->resizeView(this, &req) == kResultOk;
     _inRequestResize = false;
     if (!ok) return false;
+    // Same rule as apply_attached_size(): if the host answered with its own
+    // onSize, that rect is already in _rect and the request must not replace it.
+    if (_sizeAnsweredInRequest) return true;
   }
   _rect = req;
   return true;
