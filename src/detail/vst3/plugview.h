@@ -127,7 +127,14 @@ class WrappedView : public Steinberg::IPlugView,
   ViewRect _rect = {0, 0, 0, 0};
   bool _created = false;
   bool _createOk = false;
-  bool _everCreated = false;  // _onDestroy(true) owes the wrapper a run-loop detach
+  // _onDestroy(true) owes the wrapper a run-loop detach. What incurs that
+  // debt is setFrame() handing the run loop to _onRunLoopAvailable -- which
+  // registers the wrapper's idle timer straight away -- not GUI creation: a
+  // host that offers a frame and then drops the view without ever asking for
+  // a size (what it does when isPlatformTypeSupported refuses every type it
+  // knows) never creates a GUI, and would otherwise leave that timer
+  // registered on a run loop it is about to discard.
+  bool _runLoopAttached = false;
   const char *_createdApi = nullptr;
   bool _attached = false;
   // Geometry policy on attach: a host-chosen onSize pins the size and is
@@ -150,11 +157,13 @@ class WrappedView : public Steinberg::IPlugView,
  public:
   Steinberg::Linux::IRunLoop *getRunLoop()
   {
-    return _runLoop;
+    return _runLoop.get();
   }
 
  private:
-  Steinberg::Linux::IRunLoop *_runLoop = nullptr;
+  // queryInterface hands back a reference; owning it here returns it with the
+  // view instead of leaking one per setFrame.
+  Steinberg::IPtr<Steinberg::Linux::IRunLoop> _runLoop;
 #endif
 
 #if CLAP_WRAPPER_VST3_WAYLAND

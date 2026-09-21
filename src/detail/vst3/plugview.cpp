@@ -71,7 +71,6 @@ void WrappedView::ensure_ui(const char *api)
       _createOk = _extgui->create(_plugin, api, false);
     }
     _created = true;
-    _everCreated = true;
   }
 }
 
@@ -99,7 +98,7 @@ void WrappedView::drop_ui()
   {
     // true: the wrapper attached its run-loop handlers for this view and must
     // detach them (independent of whether the GUI is still alive right now).
-    _onDestroy(_everCreated);
+    _onDestroy(_runLoopAttached);
   }
 #if CLAP_WRAPPER_VST3_WAYLAND
   detachWayland();
@@ -418,11 +417,16 @@ tresult PLUGIN_API WrappedView::setFrame(IPlugFrame *frame)
 #if LIN
   if (_plugFrame)
   {
-    if (_plugFrame->queryInterface(Steinberg::Linux::IRunLoop::iid, (void **)&_runLoop) ==
-            Steinberg::kResultOk &&
-        _onRunLoopAvailable)
+    Steinberg::Linux::IRunLoop *runLoop = nullptr;
+    if (_plugFrame->queryInterface(Steinberg::Linux::IRunLoop::iid, (void **)&runLoop) ==
+        Steinberg::kResultOk)
     {
-      _onRunLoopAvailable();
+      _runLoop = Steinberg::owned(runLoop);
+      if (_onRunLoopAvailable)
+      {
+        _runLoopAttached = true;
+        _onRunLoopAvailable();
+      }
     }
   }
 #endif
