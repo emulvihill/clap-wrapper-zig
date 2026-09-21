@@ -115,6 +115,10 @@ struct wrapper_context_menu_item
   void vst3_to_clap(clap_id action_id);
 };
 
+// Defined in wrapasvst3_entry.cpp: the FUnknown the host handed to
+// IPluginFactory3::setHostContext, or nullptr if it never did.
+Steinberg::FUnknown *getVst3FactoryHostContext();
+
 class ClapAsVst3 : public Steinberg::Vst::SingleComponentEffect,
                    public Steinberg::Vst::IMidiMapping,
                    public Steinberg::Vst::INoteExpressionController,
@@ -304,9 +308,10 @@ class ClapAsVst3 : public Steinberg::Vst::SingleComponentEffect,
   IPtr<Steinberg::Vst::IContextMenu> vst3ContextMenu = nullptr;
   IPtr<Steinberg::Vst::IHostApplication> vst3HostApplication = nullptr;
 #if CLAP_WRAPPER_VST3_WAYLAND
-  // VST3 3.8 Wayland connection service, created from IHostApplication in
-  // initialize(); nullptr on X11-only hosts. Probed before the CLAP plugin is
-  // created so its first is_api_supported query already sees the answer.
+  // VST3 3.8 Wayland connection service, acquired in initialize() over both
+  // host routes (WrappedView::acquireWaylandHost); nullptr on X11-only hosts.
+  // Probed before the CLAP plugin is created so its first is_api_supported
+  // query already sees the answer.
   IPtr<Steinberg::IWaylandHost> vst3WaylandHost = nullptr;
 #endif
   std::string wrapper_hostname = "CLAP-As-VST3-Wrapper";

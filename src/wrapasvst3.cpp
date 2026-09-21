@@ -21,6 +21,7 @@
 #include "detail/vst3/state.h"
 #include "detail/vst3/process.h"
 #include "detail/vst3/parameter.h"
+#include "detail/vst3/runloop_fd.h"
 #include "detail/clap/fsutil.h"
 #include <locale>
 #include <sstream>
@@ -147,15 +148,10 @@ tresult PLUGIN_API ClapAsVst3::initialize(FUnknown *context)
   auto result = super::initialize(context);
   context->queryInterface(Vst::IHostApplication::iid, (void **)&vst3HostApplication);
 #if CLAP_WRAPPER_VST3_WAYLAND
-  if (vst3HostApplication)
+  if (auto *wlhost =
+          WrappedView::acquireWaylandHost(getVst3FactoryHostContext(), vst3HostApplication))
   {
-    Steinberg::IWaylandHost *wlhost = nullptr;
-    TUID wliid;
-    Steinberg::IWaylandHost::iid.toTUID(wliid);
-    if (vst3HostApplication->createInstance(wliid, wliid, (void **)&wlhost) == kResultOk && wlhost)
-    {
-      vst3WaylandHost = owned(wlhost);
-    }
+    vst3WaylandHost = owned(wlhost);
   }
 #endif
   if (result == kResultOk)
@@ -1581,7 +1577,9 @@ struct FDHandler : Steinberg::Linux::IEventHandler, public Steinberg::FObject
   }
   void PLUGIN_API onFDIsSet(Steinberg::Linux::FileDescriptor) override
   {
-    _parent->firePosixFDIsSet(_fd, _flags);
+    // Readiness only -- the run loop never reports failure, so the
+    // registration's ERROR bit must not ride along (runloop_fd.h).
+    _parent->firePosixFDIsSet(_fd, clap_wrapper_runloop_fd_events(_flags));
   }
   DELEGATE_REFCOUNT(Steinberg::FObject)
   DEFINE_INTERFACES
