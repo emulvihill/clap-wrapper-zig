@@ -71,7 +71,6 @@ void WrappedView::ensure_ui(const char *api)
       _createOk = _extgui->create(_plugin, api, false);
     }
     _created = true;
-    _everCreated = true;
   }
 }
 
@@ -99,7 +98,7 @@ void WrappedView::drop_ui()
   {
     // true: the wrapper attached its run-loop handlers for this view and must
     // detach them (independent of whether the GUI is still alive right now).
-    _onDestroy(_everCreated);
+    _onDestroy(_runLoopAttached);
   }
 #if CLAP_WRAPPER_VST3_WAYLAND
   detachWayland();
@@ -419,20 +418,25 @@ tresult PLUGIN_API WrappedView::setFrame(IPlugFrame *frame)
   // The run loop going away matters as much as it arriving: it is the wrapper's
   // only main thread, and something has to take over when the host takes it
   // back. A host may hand back a null frame and keep the view alive across an
-  // editor being closed and reopened.
-  auto *const previousRunLoop = _runLoop;
-  Steinberg::Linux::IRunLoop *runLoop{nullptr};
+  // editor being closed and reopened. Hold the previous run loop until the
+  // callback has unregistered from it.
+  const auto previousRunLoop = _runLoop;
+  Steinberg::IPtr<Steinberg::Linux::IRunLoop> runLoop;
   if (_plugFrame)
   {
-    if (_plugFrame->queryInterface(Steinberg::Linux::IRunLoop::iid, (void **)&runLoop) !=
+    Steinberg::Linux::IRunLoop *queried = nullptr;
+    if (_plugFrame->queryInterface(Steinberg::Linux::IRunLoop::iid, (void **)&queried) ==
         Steinberg::kResultOk)
     {
-      runLoop = nullptr;
+      runLoop = Steinberg::owned(queried);
     }
   }
   _runLoop = runLoop;
-  if (_runLoop != previousRunLoop && _onRunLoopChanged)
+  if (_runLoop.get() != previousRunLoop.get() && _onRunLoopChanged)
   {
+    // The callback attaches the wrapper's handlers to a new run loop, or
+    // detaches them from the one going away.
+    _runLoopAttached = _runLoop.get() != nullptr;
     _onRunLoopChanged();
   }
 #endif
