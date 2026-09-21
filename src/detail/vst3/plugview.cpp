@@ -170,8 +170,11 @@ tresult PLUGIN_API WrappedView::attached(void *parent, FIDString type)
 #endif
   }
 
-  _window = {api, {ptr}};
+  // ensure_ui() may destroy a GUI created for another transport, and
+  // destroy_ui() clears _window.ptr -- so create first, then publish the
+  // parent payload, or set_parent() would be handed a null pointer.
   ensure_ui(api);
+  _window = {api, {ptr}};
   bool ok = _createOk && _extgui->set_parent(_plugin, &_window);
   if (ok)
   {
@@ -231,9 +234,13 @@ void WrappedView::apply_attached_size()
     // keep reporting the pre-attach rect until the request has been made.
     _inRequestResize = true;
     _reportCachedSize = true;
-    _plugFrame->resizeView(this, &fresh);
+    const bool ok = _plugFrame->resizeView(this, &fresh) == kResultOk;
     _reportCachedSize = false;
     _inRequestResize = false;
+    // A refused request must not be recorded as the size in force: _rect is
+    // what the next attach compares against, so keeping `fresh` here would
+    // make the retry look unnecessary and strand the host window.
+    if (!ok) return;
   }
   _rect = fresh;
 }
