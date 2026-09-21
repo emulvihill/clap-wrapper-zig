@@ -272,6 +272,24 @@ const void *WrappedView::waylandHostExtension(Steinberg::IWaylandHost *host, con
   return nullptr;
 }
 
+Steinberg::IWaylandHost *WrappedView::acquireWaylandHost(Steinberg::FUnknown *factoryContext,
+                                                         Steinberg::Vst::IHostApplication *hostApp)
+{
+  Steinberg::TUID iid;
+  Steinberg::IWaylandHost::iid.toTUID(iid);
+  Steinberg::IWaylandHost *host = nullptr;
+  // The factory context first: it is the object 3.8 requires every Wayland
+  // host to hand over early, and a host that only answers queryInterface on it
+  // (Fender Studio Pro 8) refuses createInstance with kNoInterface.
+  if (factoryContext && factoryContext->queryInterface(iid, (void **)&host) == Steinberg::kResultOk &&
+      host)
+    return host;
+  host = nullptr;
+  if (hostApp && hostApp->createInstance(iid, iid, (void **)&host) == Steinberg::kResultOk && host)
+    return host;
+  return nullptr;
+}
+
 bool WrappedView::attachWayland(void *parent)
 {
   if (!_waylandHost || _wlDisplay) return false;

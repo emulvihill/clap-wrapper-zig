@@ -184,6 +184,16 @@ static void makeCIDComCompatible(TUID &lcid)
 #endif
 }
 
+// The FUnknown the host passes to IPluginFactory3::setHostContext. VST3 3.8
+// names it as the early route to IWaylandHost, and it is the only host object
+// a hosted instance can reach before its own initialize().
+static Steinberg::FUnknown *gFactoryHostContext = nullptr;
+
+Steinberg::FUnknown *getVst3FactoryHostContext()
+{
+  return gFactoryHostContext;
+}
+
 IPluginFactory *GetPluginFactoryEntryPoint()
 {
 #if _DEBUG
@@ -264,6 +274,7 @@ IPluginFactory *GetPluginFactoryEntryPoint()
     LOGDETAIL("created factory for vendor '{}'", factoryvendor);
 
     gPluginFactory = new Steinberg::CPluginFactory(factoryInfo);
+    gPluginFactory->addHostContextCallback([](Steinberg::FUnknown *ctx) { gFactoryHostContext = ctx; });
     // resize the classInfo vector
     gCreationContexts.clear();
     gCreationContexts.reserve(gClapLibrary.plugins.size());
