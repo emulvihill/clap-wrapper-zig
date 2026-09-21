@@ -20,6 +20,7 @@
 #if LIN && CLAP_WRAPPER_WAYLAND_EMBED
 #define CLAP_WRAPPER_VST3_WAYLAND 1
 #include <pluginterfaces/gui/iwaylandframe.h>
+#include <pluginterfaces/vst/ivsthostapplication.h>
 #include "clapwrapper/wayland.h"
 #else
 #define CLAP_WRAPPER_VST3_WAYLAND 0
@@ -167,6 +168,18 @@ class WrappedView : public Steinberg::IPlugView,
   // The wrapper's CLAP_HOST_WAYLAND_EMBED answer for an instance whose VST3
   // host provided `host`; nullptr for any other id or without IWaylandHost.
   static const void *waylandHostExtension(Steinberg::IWaylandHost *host, const char *extension);
+
+  // The singleton IWaylandHost, over both routes hosts actually use, with a
+  // reference the caller owns. 3.8 documents createInstance on
+  // IHostApplication, and adds that the host "should pass IHostApplication to
+  // the plug-in using IPluginFactory3::setHostContext" because the interface
+  // may be needed early -- so the factory context is the one object every 3.8
+  // Wayland host is required to hand over, and some (Fender Studio Pro 8)
+  // answer only a direct queryInterface on it while refusing createInstance
+  // with kNoInterface. Ask the factory context first, then the component's
+  // IHostApplication; either argument may be null.
+  static Steinberg::IWaylandHost *acquireWaylandHost(Steinberg::FUnknown *factoryContext,
+                                                     Steinberg::Vst::IHostApplication *hostApp);
 
  private:
   Steinberg::IWaylandHost *_waylandHost = nullptr;
