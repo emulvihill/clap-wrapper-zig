@@ -6,6 +6,7 @@
 
 #include "detail/clap/fsutil.h"
 #include "detail/os/fs.h"
+#include "bundle-version.h"
 
 struct auInfo
 {
@@ -17,25 +18,7 @@ struct auInfo
 
   uint32_t bundleversToVersion() const
   {
-    uint16_t rev[3]{0, 0, 0};
-    auto sum = [&]()
-    {
-      auto res = std::max((rev[0] << 16) + (rev[1] << 8) + rev[2], 1);
-      return res;
-    };
-    auto uv = bundlevers;
-    for (int i = 0; i < 3; ++i)
-    {
-      auto p = uv.find('.');
-      if (p == std::string::npos)
-      {
-        return sum();
-      }
-      auto sub = uv.substr(0, p);
-      rev[i] = std::atoi(sub.c_str());
-      uv = uv.substr(p + 1);
-    }
-    return sum();
+    return Clap::AUv2::bundleVersionToAUVersion(bundlevers);
   }
 
   void writePListFragment(std::ostream &of, int idx) const
