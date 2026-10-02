@@ -1296,6 +1296,10 @@ bool ClapAsVst3::register_timer(uint32_t period_ms, clap_id *timer_id)
       // pass the id to the plugin
       *timer_id = to.timer_id;
 #if LIN
+      // A run loop need not hold a reference to a registered handler
+      // (Studio Pro does not), so a handler is only ever dropped after
+      // unregisterTimer -- otherwise the host fires onTimer on freed memory.
+      if (to.handler && _iRunLoop) _iRunLoop->unregisterTimer(to.handler.get());
       to.handler.reset();
       attachTimers(_iRunLoop);
 #endif
@@ -1488,7 +1492,9 @@ void ClapAsVst3::attachTimers(Steinberg::Linux::IRunLoop *r)
 
     for (auto &t : _timersObjects)
     {
-      if (!t.handler)
+      // period 0 is a free slot: registering it would hand the run loop a
+      // 0 ms timer for an id the plugin no longer owns.
+      if (!t.handler && t.period > 0)
       {
         t.handler = Steinberg::owned(new TimerHandler(this, t.timer_id));
         _iRunLoop->registerTimer(t.handler.get(), t.period);
