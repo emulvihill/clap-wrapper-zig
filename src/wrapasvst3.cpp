@@ -22,6 +22,7 @@
 #include "detail/vst3/process.h"
 #include "detail/vst3/parameter.h"
 #include "detail/vst3/runloop_fd.h"
+#include "detail/vst3/timer_schedule.h"
 #include "detail/clap/fsutil.h"
 #include <cstring>
 #include <locale>
@@ -2062,9 +2063,8 @@ void ClapAsVst3::onIdle()
     auto now = os::getTickInMS();
     for (auto &&to : _timersObjects)
     {
-      if (to.period > 0 && to.nexttick < now)
+      if (Clap::timerDue(to.nexttick, to.period, now))
       {
-        to.nexttick = now + to.period;
         this->_plugin->_ext._timer->on_timer(_plugin->_plugin, to.timer_id);
       }
     }
