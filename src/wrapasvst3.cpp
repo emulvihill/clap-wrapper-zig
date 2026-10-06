@@ -2061,11 +2061,15 @@ void ClapAsVst3::onIdle()
   {
     // handling timerobjects
     auto now = os::getTickInMS();
-    for (auto &&to : _timersObjects)
+    // on_timer may call register_timer, which can grow _timersObjects: index
+    // afresh after every callback and never hold a reference across one. A
+    // timer unregistered meanwhile has period 0, which timerDue skips.
+    for (size_t i = 0; i < _timersObjects.size(); ++i)
     {
-      if (Clap::timerDue(to.nexttick, to.period, now))
+      if (Clap::timerDue(_timersObjects[i].nexttick, _timersObjects[i].period, now))
       {
-        this->_plugin->_ext._timer->on_timer(_plugin->_plugin, to.timer_id);
+        const auto timer_id = _timersObjects[i].timer_id;
+        this->_plugin->_ext._timer->on_timer(_plugin->_plugin, timer_id);
       }
     }
   }
