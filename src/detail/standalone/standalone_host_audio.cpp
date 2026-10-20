@@ -600,6 +600,17 @@ void StandaloneHost::startAudioThreadOnImpl(const std::string &inputDevice, uint
   audioOutputDevice = outputDevice;
   audioOutputUsed = useOutput;
 
+  // A plugin without audio inputs has nothing to take from a capture device, and
+  // opening one anyway can fail the whole stream: Windows refuses every capture
+  // endpoint while microphone access is off, a line input included. The call sites
+  // gate on numAudioInputs, but not all of them (the Windows frontend's own start
+  // does not), so it is enforced here, where every stream is opened.
+  if (useInput && numAudioInputs == 0)
+  {
+    useInput = false;
+    audioInputUsed = false;
+  }
+
   // Drop the side we cannot open rather than failing the whole stream: a box with no
   // capture device at all is an entirely ordinary machine.
   const auto *outInfo{useOutput ? findDevice(outputDevice) : nullptr};
