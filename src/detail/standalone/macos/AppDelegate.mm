@@ -561,25 +561,6 @@ static bool showingAudioError{false};
   std::string pid{PLUGIN_ID};
   int pindex{PLUGIN_INDEX};
 
-#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
-  switch ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio])
-  {
-    case AVAuthorizationStatusNotDetermined:
-    {
-      // The app hasn't yet asked the user for camera access.
-      [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio
-                               completionHandler:^(BOOL granted) {
-                                 if (granted)
-                                 {
-                                 }
-                               }];
-      break;
-    }
-    default:
-      break;
-  }
-#endif
-
   // before the plugin is created: a plugin asks supports_audio_midi_configuration_screen
   // from init() or from its GUI's create(), and both run inside mainCreatePlugin and the
   // block below it
@@ -760,6 +741,21 @@ static bool showingAudioError{false};
   // devices: the run loop that would draw it does not turn until this returns
   [[self window] displayIfNeeded];
   [CATransaction flush];
+
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+  // Microphone access is asked for only by a plugin that has audio inputs to feed.
+  // The port count is known once the plugin exists, and audio has not started yet.
+  // An instrument with none has no use for the microphone, and asking anyway puts
+  // a permission prompt in front of every first launch.
+  if (freeaudio::clap_wrapper::standalone::getStandaloneHost()->numAudioInputs > 0 &&
+      [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] ==
+          AVAuthorizationStatusNotDetermined)
+  {
+    [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio
+                             completionHandler:^(BOOL granted) {
+                             }];
+  }
+#endif
 
   freeaudio::clap_wrapper::standalone::mainStartAudio();
 }
