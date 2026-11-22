@@ -618,7 +618,7 @@ class ClapAsVst3 : public Steinberg::Vst::SingleComponentEffect,
 
  public:
   void fireTimer(clap_id timer_id);
-  void firePosixFDIsSet(int fd, clap_posix_fd_flags_t flags);
+  void firePosixFDIsSet(int fd);
 
  private:
   // INoteExpression

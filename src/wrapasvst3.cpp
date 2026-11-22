@@ -2311,12 +2311,15 @@ void ClapAsVst3::fireTimer(clap_id timer_id)
 
 bool ClapAsVst3::register_fd(int fd, clap_posix_fd_flags_t flags)
 {
+  // IRunLoop signals readability only (runloop_fd.h)
+  if (!clap_wrapper_runloop_fd_supported(flags)) return false;
   _posixFDObjects.emplace_back(fd, flags);
   attachPosixFD(_iRunLoop);
   return true;
 }
 bool ClapAsVst3::modify_fd(int fd, clap_posix_fd_flags_t flags)
 {
+  if (!clap_wrapper_runloop_fd_supported(flags)) return false;
   bool res{false};
   for (auto &p : _posixFDObjects)
   {
@@ -2357,16 +2360,12 @@ struct FDHandler : Steinberg::Linux::IEventHandler, public Steinberg::FObject
 {
   ClapAsVst3 *_parent{nullptr};
   int _fd{0};
-  clap_posix_fd_flags_t _flags{};
-  FDHandler(ClapAsVst3 *parent, int fd, clap_posix_fd_flags_t flags)
-    : _parent(parent), _fd(fd), _flags(flags)
+  FDHandler(ClapAsVst3 *parent, int fd) : _parent(parent), _fd(fd)
   {
   }
   void PLUGIN_API onFDIsSet(Steinberg::Linux::FileDescriptor) override
   {
-    // Readiness only -- the run loop never reports failure, so the
-    // registration's ERROR bit must not ride along (runloop_fd.h).
-    _parent->firePosixFDIsSet(_fd, clap_wrapper_runloop_fd_events(_flags));
+    _parent->firePosixFDIsSet(_fd);
   }
   DELEGATE_REFCOUNT(Steinberg::FObject)
   DEFINE_INTERFACES
@@ -2385,7 +2384,7 @@ void ClapAsVst3::attachPosixFD(Steinberg::Linux::IRunLoop *r)
     {
       if (!p.handler)
       {
-        p.handler = Steinberg::owned(new FDHandler(this, p.fd, p.flags));
+        p.handler = Steinberg::owned(new FDHandler(this, p.fd));
         r->registerEventHandler(p.handler.get(), p.fd);
       }
     }
@@ -2408,9 +2407,20 @@ void ClapAsVst3::detachPosixFD(Steinberg::Linux::IRunLoop *r)
   }
 }
 
-void ClapAsVst3::firePosixFDIsSet(int fd, clap_posix_fd_flags_t flags)
+void ClapAsVst3::firePosixFDIsSet(int fd)
 {
-  _plugin->_ext._posixfd->on_fd(_plugin->_plugin, fd, flags);
+  // The flags in force now, not at registration: modify_fd may have changed
+  // them since. Readability only -- the run loop reports nothing else, and
+  // never failure (runloop_fd.h).
+  for (auto &p : _posixFDObjects)
+  {
+    if (p.fd == fd)
+    {
+      if (const auto events = clap_wrapper_runloop_fd_events(p.flags))
+        _plugin->_ext._posixfd->on_fd(_plugin->_plugin, fd, events);
+      return;
+    }
+  }
 }
 #endif
 
