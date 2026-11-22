@@ -730,6 +730,14 @@ IPlugView *PLUGIN_API ClapAsVst3::createView(FIDString /*name*/)
 #if LIN
             if (auto *const runLoop = _wrappedview->getRunLoop())
             {
+              // a frame replaced by another without a null frame in between:
+              // leave the old run loop first, or its handlers stay registered
+              // there and the plugin's timers and fds never reach the new one
+              if (auto *const previous = _iRunLoop.load(); previous && previous != runLoop)
+              {
+                detachTimers(previous);
+                detachPosixFD(previous);
+              }
               attachTimers(runLoop);
               attachPosixFD(runLoop);
             }
