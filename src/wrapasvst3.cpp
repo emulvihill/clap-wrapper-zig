@@ -704,7 +704,7 @@ IPlugView *PLUGIN_API ClapAsVst3::createView(FIDString /*name*/)
     if (_wrappedview == nullptr)
     {
       _wrappedview = new WrappedView(
-          _plugin->_plugin, _plugin->_ext._gui, [this]() { clearContextMenu(); },
+          _plugin->_plugin, _plugin->_ext._gui, _mainThreadLock, [this]() { clearContextMenu(); },
           [this](bool everCreated)
           {
             if (everCreated)

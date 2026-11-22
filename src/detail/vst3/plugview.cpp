@@ -12,12 +12,14 @@ DEF_CLASS_IID(Steinberg::IWaylandFrame)
 #endif
 
 WrappedView::WrappedView(const clap_plugin_t *plugin, const clap_plugin_gui_t *gui,
+                         std::recursive_mutex &mainThreadLock,
                          std::function<void()> onReleaseAdditionalReferences,
                          std::function<void(bool)> onDestroy, std::function<void()> onRunLoopChanged)
   : IPlugView()
   , FObject()
   , _plugin(plugin)
   , _extgui(gui)
+  , _mainThreadLock(mainThreadLock)
   , _onReleaseAdditionalReferences(onReleaseAdditionalReferences)
   , _onRunLoopChanged(onRunLoopChanged)
   , _onDestroy(onDestroy)
@@ -78,6 +80,12 @@ void WrappedView::ensure_ui(const char *api)
 void WrappedView::destroy_ui()
 {
   if (!_created) return;
+  // [main-thread] -- once the host has taken the run loop back (setFrame(nullptr)),
+  // the Linux helper thread idles the plug-in and fires its timers under this
+  // lock, and the host may still release the view or call removed(): a timer
+  // must not be running while the GUI is destroyed underneath it. Only the GUI
+  // teardown is guarded; _onDestroy runs unlocked, since it wakes the helper.
+  std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
   releaseAdditionalReferences();
   if (_createOk)
   {

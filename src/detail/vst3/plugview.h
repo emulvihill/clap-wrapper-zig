@@ -13,6 +13,7 @@
 #include <pluginterfaces/gui/iplugviewcontentscalesupport.h>
 #include <clap/clap.h>
 #include <functional>
+#include <mutex>
 
 // VST3 3.8 WaylandSurfaceID embedding (see include/clapwrapper/wayland.h).
 // Opt-in: define CLAP_WRAPPER_WAYLAND_EMBED=1 on the vst3 wrapper lib. Off by
@@ -34,8 +35,8 @@ class WrappedView : public Steinberg::IPlugView,
 {
  public:
   WrappedView(const clap_plugin_t *plugin, const clap_plugin_gui_t *gui,
-              std::function<void()> onReleaseAdditionalReferences, std::function<void(bool)> onDestroy,
-              std::function<void()> onRunLoopChanged);
+              std::recursive_mutex &mainThreadLock, std::function<void()> onReleaseAdditionalReferences,
+              std::function<void(bool)> onDestroy, std::function<void()> onRunLoopChanged);
   ~WrappedView();
 
   // IPlugView interface
@@ -120,6 +121,9 @@ class WrappedView : public Steinberg::IPlugView,
   void apply_attached_size();
   const clap_plugin_t *_plugin = nullptr;
   const clap_plugin_gui_t *_extgui = nullptr;
+  // The wrapper's main-thread lock (ClapAsVst3::_mainThreadLock), held while
+  // the plugin GUI is destroyed. \see destroy_ui()
+  std::recursive_mutex &_mainThreadLock;
   std::function<void()> _onReleaseAdditionalReferences = nullptr, _onRunLoopChanged = nullptr;
   std::function<void(bool)> _onDestroy = nullptr;
   clap_window_t _window = {nullptr, {nullptr}};
