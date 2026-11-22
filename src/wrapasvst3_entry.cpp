@@ -187,7 +187,22 @@ static void makeCIDComCompatible(TUID &lcid)
 // The FUnknown the host passes to IPluginFactory3::setHostContext. VST3 3.8
 // names it as the early route to IWaylandHost, and it is the only host object
 // a hosted instance can reach before its own initialize().
+//
+// Held with a reference of its own, as any stored interface pointer is: the
+// host may drop its own reference while this module, and the instances it
+// creates later, still need the object. The reference is given back when the
+// host replaces the context and at module unload -- like the hosted library,
+// never from static destruction, which may run after the host is gone.
 static Steinberg::FUnknown *gFactoryHostContext = nullptr;
+
+static void setFactoryHostContext(Steinberg::FUnknown *ctx)
+{
+  if (ctx) ctx->addRef();
+  if (gFactoryHostContext) gFactoryHostContext->release();
+  gFactoryHostContext = ctx;
+}
+
+static Steinberg::ModuleTerminator gReleaseFactoryHostContext([]() { setFactoryHostContext(nullptr); });
 
 Steinberg::FUnknown *getVst3FactoryHostContext()
 {
@@ -274,7 +289,7 @@ IPluginFactory *GetPluginFactoryEntryPoint()
     LOGDETAIL("created factory for vendor '{}'", factoryvendor);
 
     gPluginFactory = new Steinberg::CPluginFactory(factoryInfo);
-    gPluginFactory->addHostContextCallback([](Steinberg::FUnknown *ctx) { gFactoryHostContext = ctx; });
+    gPluginFactory->addHostContextCallback(setFactoryHostContext);
     // resize the classInfo vector
     gCreationContexts.clear();
     gCreationContexts.reserve(gClapLibrary.plugins.size());
