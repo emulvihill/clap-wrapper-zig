@@ -121,8 +121,12 @@ class WrappedView : public Steinberg::IPlugView,
   void apply_attached_size();
   const clap_plugin_t *_plugin = nullptr;
   const clap_plugin_gui_t *_extgui = nullptr;
-  // The wrapper's main-thread lock (ClapAsVst3::_mainThreadLock), held while
-  // the plugin GUI is destroyed. \see destroy_ui()
+  // The wrapper's main-thread lock (ClapAsVst3::_mainThreadLock), held across
+  // every call into the plugin's GUI. With no run loop -- before the host hands
+  // one over, or after setFrame(nullptr) takes it back -- the Linux helper
+  // thread idles the plug-in and fires its timers under this lock, so without
+  // it a GUI could be created, resized or destroyed under a timer in flight.
+  // Nothing guarded may reach os::idleSourceChanged() (the helper's lock).
   std::recursive_mutex &_mainThreadLock;
   std::function<void()> _onReleaseAdditionalReferences = nullptr, _onRunLoopChanged = nullptr;
   std::function<void(bool)> _onDestroy = nullptr;

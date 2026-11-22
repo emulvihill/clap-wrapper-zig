@@ -80,11 +80,9 @@ void WrappedView::ensure_ui(const char *api)
 void WrappedView::destroy_ui()
 {
   if (!_created) return;
-  // [main-thread] -- once the host has taken the run loop back (setFrame(nullptr)),
-  // the Linux helper thread idles the plug-in and fires its timers under this
-  // lock, and the host may still release the view or call removed(): a timer
-  // must not be running while the GUI is destroyed underneath it. Only the GUI
-  // teardown is guarded; _onDestroy runs unlocked, since it wakes the helper.
+  // [main-thread] -- must not run while the Linux helper thread is inside this
+  // plug-in's idle. Only the GUI teardown is guarded: _onDestroy wakes the
+  // helper, so drop_ui() calls it unlocked. \see _mainThreadLock
   std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
   releaseAdditionalReferences();
   if (_createOk)
@@ -126,6 +124,9 @@ void WrappedView::releaseAdditionalReferences()
 
 tresult PLUGIN_API WrappedView::isPlatformTypeSupported(FIDString type)
 {
+  // [main-thread] -- must not run while the Linux helper thread is inside this
+  // plug-in's idle. \see _mainThreadLock
+  std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
   static struct vst3_and_clap_match_types_t
   {
     const char *VST3;
@@ -159,6 +160,9 @@ tresult PLUGIN_API WrappedView::isPlatformTypeSupported(FIDString type)
 
 tresult PLUGIN_API WrappedView::attached(void *parent, FIDString type)
 {
+  // [main-thread] -- must not run while the Linux helper thread is inside this
+  // plug-in's idle. \see _mainThreadLock
+  std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
   const char *api = platform_api();
   void *ptr = parent;
   bool wayland = false;
@@ -351,6 +355,9 @@ tresult PLUGIN_API WrappedView::onKeyUp(char16 /*key*/, int16 /*keyCode*/, int16
 
 tresult PLUGIN_API WrappedView::getSize(ViewRect *size)
 {
+  // [main-thread] -- must not run while the Linux helper thread is inside this
+  // plug-in's idle. \see _mainThreadLock
+  std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
   if (!size) return kInvalidArgument;
   if (_reportCachedSize)
   {
@@ -371,6 +378,9 @@ tresult PLUGIN_API WrappedView::getSize(ViewRect *size)
 
 tresult PLUGIN_API WrappedView::onSize(ViewRect *newSize)
 {
+  // [main-thread] -- must not run while the Linux helper thread is inside this
+  // plug-in's idle. \see _mainThreadLock
+  std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
   // TODO: discussion took place if this call should be ignored completely
   // since it seems not to match the CLAP UI scheme.
   // for now, it is left in and might be removed in the future.
@@ -453,12 +463,18 @@ tresult PLUGIN_API WrappedView::setFrame(IPlugFrame *frame)
 
 tresult PLUGIN_API WrappedView::canResize()
 {
+  // [main-thread] -- must not run while the Linux helper thread is inside this
+  // plug-in's idle. \see _mainThreadLock
+  std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
   ensure_ui();
   return _extgui->can_resize(_plugin) ? kResultOk : kResultFalse;
 }
 
 tresult PLUGIN_API WrappedView::checkSizeConstraint(ViewRect *rect)
 {
+  // [main-thread] -- must not run while the Linux helper thread is inside this
+  // plug-in's idle. \see _mainThreadLock
+  std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
   ensure_ui();
   uint32_t w = rect->getWidth();
   uint32_t h = rect->getHeight();
@@ -496,6 +512,9 @@ bool WrappedView::request_resize(uint32_t width, uint32_t height)
 }
 tresult WrappedView::setContentScaleFactor(IPlugViewContentScaleSupport::ScaleFactor factor)
 {
+  // [main-thread] -- must not run while the Linux helper thread is inside this
+  // plug-in's idle. \see _mainThreadLock
+  std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
   ensure_ui();
   if (_extgui->set_scale(_plugin, factor))
   {
