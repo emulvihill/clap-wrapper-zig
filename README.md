@@ -218,6 +218,7 @@ issue or a pull request:
   automatically when a fix lands, so an open issue is not proof of an unfixed bug.
 - Base pull requests on `next`, not `main`.
 - Make sure your commit is clang-formatted according to the `.clang-format` file.
+
 ## Licensing
 
 The `clap-wrapper` project is released under the MIT license.

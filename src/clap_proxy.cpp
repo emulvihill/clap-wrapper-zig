@@ -612,12 +612,7 @@ const void *Plugin::clapExtension(const clap_host *host, const char *extension)
   if (!strcmp(extension, CLAP_EXT_POSIX_FD_SUPPORT)) return &HostExt::hostposixfd;
 #endif
 
-  if (host && host->host_data)
-  {
-    auto self = static_cast<Plugin *>(host->host_data);
-    if (self->_parentHost) return self->_parentHost->host_extension(extension);
-  }
-  return nullptr;
+  return HostExt::self(host)->_parentHost->host_extension(extension);
 }
 
 // Request the host to schedule a call to plugin->on_main_thread(plugin) on the main thread.

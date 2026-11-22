@@ -371,22 +371,25 @@ tresult PLUGIN_API WrappedView::getSize(ViewRect *size)
   // [main-thread] -- must not run while the Linux helper thread is inside this
   // plug-in's idle. \see _mainThreadLock
   std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
-  if (!size) return kInvalidArgument;
-  if (_reportCachedSize)
+  if (size && _reportCachedSize)
   {
     *size = _rect;
     return kResultOk;
   }
   ensure_ui();
-  uint32_t w, h;
-  if (_extgui->get_size(_plugin, &w, &h))
+  if (size)
   {
-    size->right = size->left + w;
-    size->bottom = size->top + h;
-    _rect = *size;
-    return kResultOk;
+    uint32_t w, h;
+    if (_extgui->get_size(_plugin, &w, &h))
+    {
+      size->right = size->left + w;
+      size->bottom = size->top + h;
+      _rect = *size;
+      return kResultOk;
+    }
+    return kResultFalse;
   }
-  return kResultFalse;
+  return kInvalidArgument;
 }
 
 tresult PLUGIN_API WrappedView::onSize(ViewRect *newSize)
@@ -502,26 +505,22 @@ tresult PLUGIN_API WrappedView::checkSizeConstraint(ViewRect *rect)
 
 bool WrappedView::request_resize(uint32_t width, uint32_t height)
 {
-  // Request through a copy: hosts call getSize() from inside resizeView and
-  // getSize writes _rect, so passing &_rect would let that call overwrite the
-  // request it is being compared against.
-  ViewRect req = _rect;
-  req.right = req.left + (int32)width;
-  req.bottom = req.top + (int32)height;
+  if (!_plugFrame) return false;
 
-  if (_plugFrame)
-  {
-    _sizeAnsweredInRequest = false;
-    _inRequestResize = true;
-    const bool ok = _plugFrame->resizeView(this, &req) == kResultOk;
-    _inRequestResize = false;
-    if (!ok) return false;
-    // Same rule as apply_attached_size(): if the host answered with its own
-    // onSize, that rect is already in _rect and the request must not replace it.
-    if (_sizeAnsweredInRequest) return true;
-  }
-  _rect = req;
-  return true;
+  // Hosts can query getSize before onSize, which updates _rect with current geometry.
+  // Keep the requested rectangle independent so that query cannot alter the request.
+  auto requestedRect = _rect;
+  requestedRect.right = requestedRect.left + (int32)width;
+  requestedRect.bottom = requestedRect.top + (int32)height;
+
+  _sizeAnsweredInRequest = false;
+  _inRequestResize = true;
+  const bool ok = _plugFrame->resizeView(this, &requestedRect) == kResultOk;
+  _inRequestResize = false;
+  // Same rule as apply_attached_size(): if the host answered with its own
+  // onSize, that rect is already in _rect and the request must not replace it.
+  if (ok && !_sizeAnsweredInRequest) _rect = requestedRect;
+  return ok;
 }
 tresult WrappedView::setContentScaleFactor(IPlugViewContentScaleSupport::ScaleFactor factor)
 {
