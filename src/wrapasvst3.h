@@ -594,6 +594,10 @@ class ClapAsVst3 : public Steinberg::Vst::SingleComponentEffect,
 
   void attachTimers(Steinberg::Linux::IRunLoop *);
   void detachTimers(Steinberg::Linux::IRunLoop *);
+  // The editor's run loop changed (setFrame, or the view going away with one
+  // attached): move the wrapper's handlers onto `runLoop`, or with nullptr take
+  // them off and hand the idle back to the helper thread.
+  void handOffRunLoop(Steinberg::Linux::IRunLoop *runLoop);
   // Written on the host's main thread, read from the helper thread; every
   // write to null is followed by os::idleSourceChanged() to wake the helper.
   std::atomic<Steinberg::Linux::IRunLoop *> _iRunLoop{nullptr};

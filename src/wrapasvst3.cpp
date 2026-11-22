@@ -710,14 +710,10 @@ IPlugView *PLUGIN_API ClapAsVst3::createView(FIDString /*name*/)
             if (everCreated)
             {
 #if LIN
-              // the host calls the destructor, the wrapper just removes its pointer
-              detachTimers(_wrappedview->getRunLoop());
-              detachPosixFD(_wrappedview->getRunLoop());
-              _iRunLoop = nullptr;
-
-              // the editor is going away, and with it the only main thread the
-              // host was ever going to hand us -- wake the helper back up
-              os::idleSourceChanged();
+              // the host calls the destructor, the wrapper just removes its
+              // pointer -- and the editor takes with it the only main thread
+              // the host was ever going to hand us
+              handOffRunLoop(nullptr);
 #endif
 
               clearContextMenu();
@@ -726,31 +722,8 @@ IPlugView *PLUGIN_API ClapAsVst3::createView(FIDString /*name*/)
           },
           [this]()
           {
-
 #if LIN
-            if (auto *const runLoop = _wrappedview->getRunLoop())
-            {
-              // a frame replaced by another without a null frame in between:
-              // leave the old run loop first, or its handlers stay registered
-              // there and the plugin's timers and fds never reach the new one
-              if (auto *const previous = _iRunLoop.load(); previous && previous != runLoop)
-              {
-                detachTimers(previous);
-                detachPosixFD(previous);
-              }
-              attachTimers(runLoop);
-              attachPosixFD(runLoop);
-            }
-            else if (_iRunLoop)
-            {
-              // the host took the frame back but kept the view: unregister
-              // while the old run loop is still alive, then hand the idle back
-              // to the helper thread
-              detachTimers(_iRunLoop);
-              detachPosixFD(_iRunLoop);
-              _iRunLoop = nullptr;
-              os::idleSourceChanged();
-            }
+            handOffRunLoop(_wrappedview->getRunLoop());
 #else
             (void)this;  // silence warning on non-linux
 #endif
@@ -2248,7 +2221,7 @@ void ClapAsVst3::attachTimers(Steinberg::Linux::IRunLoop *r)
 {
   if (r)
   {
-    const auto previous = _iRunLoop.exchange(r);
+    _iRunLoop.store(r);
 
     if (_idleHandler)
     {
@@ -2270,16 +2243,45 @@ void ClapAsVst3::attachTimers(Steinberg::Linux::IRunLoop *r)
         r->registerTimer(t.handler.get(), t.period);
       }
     }
-
-    // The host's main thread drives the idle from here on, but announce it
-    // only on the transition: register_timer() also lands here, and it may run
+    // No idleSourceChanged() here: register_timer() lands here too, possibly
     // from on_main_thread() with _mainThreadLock held, where taking the
-    // helper's lock would invert the documented order.
-    if (previous == nullptr)
-    {
-      os::idleSourceChanged();
-    }
+    // helper's lock would invert the documented order. \see handOffRunLoop()
   }
+}
+
+void ClapAsVst3::handOffRunLoop(Steinberg::Linux::IRunLoop *runLoop)
+{
+  bool wakeHelper = false;
+  {
+    // [main-thread] -- with no run loop attached the helper thread may be
+    // inside this plug-in's idle right now, where on_timer can call
+    // register_timer and grow _timersObjects under our feet. \see _mainThreadLock
+    std::lock_guard<std::recursive_mutex> mainThreadGuard(_mainThreadLock);
+    auto *const previous = _iRunLoop.load();
+    if (previous && previous != runLoop)
+    {
+      // the run loop going away, or a frame replaced by another without a
+      // null frame in between: unregister while the old run loop is still
+      // alive, or its handlers stay registered there and the plugin's timers
+      // and fds never reach the new one
+      detachTimers(previous);
+      detachPosixFD(previous);
+    }
+    if (runLoop)
+    {
+      attachTimers(runLoop);
+      attachPosixFD(runLoop);
+    }
+    else
+    {
+      _iRunLoop = nullptr;
+    }
+    // the helper stands down while a run loop drives the idle, and takes it
+    // back when there is none
+    wakeHelper = (previous == nullptr) != (runLoop == nullptr);
+  }
+  // Lock order is helper-then-plug-object: wake it only once ours is released.
+  if (wakeHelper) os::idleSourceChanged();
 }
 
 void ClapAsVst3::detachTimers(Steinberg::Linux::IRunLoop *r)
@@ -2376,8 +2378,7 @@ void ClapAsVst3::attachPosixFD(Steinberg::Linux::IRunLoop *r)
 {
   if (r)
   {
-    // No idleSourceChanged() here: the frame callback calls attachTimers()
-    // first, which announces the run loop. \see attachTimers()
+    // No idleSourceChanged() here. \see handOffRunLoop()
     _iRunLoop.store(r);
 
     for (auto &p : _posixFDObjects)
