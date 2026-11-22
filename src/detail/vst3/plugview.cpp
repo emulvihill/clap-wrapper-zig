@@ -79,7 +79,7 @@ void WrappedView::ensure_ui(const char *api)
 // Destroys the plugin GUI but keeps this view alive for a later attach.
 void WrappedView::destroy_ui()
 {
-  if (!_created) return;
+  if (!_created || !_extgui) return;
   // [main-thread] -- must not run while the Linux helper thread is inside this
   // plug-in's idle. Only the GUI teardown is guarded: _onDestroy wakes the
   // helper, so drop_ui() calls it unlocked. \see _mainThreadLock
@@ -108,6 +108,19 @@ void WrappedView::drop_ui()
   }
 #if CLAP_WRAPPER_VST3_WAYLAND
   detachWayland();
+#endif
+}
+
+void WrappedView::dropPlugin()
+{
+  drop_ui();
+  _onReleaseAdditionalReferences = nullptr;
+  _onRunLoopChanged = nullptr;
+  _onDestroy = nullptr;
+  _extgui = nullptr;
+  _plugin = nullptr;
+#if CLAP_WRAPPER_VST3_WAYLAND
+  _waylandHost = nullptr;
 #endif
 }
 

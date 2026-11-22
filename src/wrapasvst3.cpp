@@ -181,6 +181,11 @@ tresult PLUGIN_API ClapAsVst3::initialize(FUnknown *context)
 
 tresult PLUGIN_API ClapAsVst3::terminate()
 {
+  // A host should release the editor's view before this; if it has not, the
+  // view's GUI and run-loop handlers go now, while the plugin and the Wayland
+  // host are still here, and the view keeps nothing that points back at us.
+  if (auto *const view = _wrappedview) view->dropPlugin();
+
   vst3HostApplication.reset();
 #if CLAP_WRAPPER_VST3_WAYLAND
   // Acquired from IHostApplication in initialize(); it must not outlive the

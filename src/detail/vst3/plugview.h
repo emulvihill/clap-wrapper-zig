@@ -106,6 +106,11 @@ class WrappedView : public Steinberg::IPlugView,
 
   // wrapper needed interfaces
   bool request_resize(uint32_t width, uint32_t height);
+  // The component is terminating while the host still holds this view (it
+  // should have released it first): tear the GUI and the run-loop handlers
+  // down while the plugin is still alive, and let go of everything that points
+  // back into the wrapper, so a late release finds nothing left to call.
+  void dropPlugin();
 
  private:
   // The CLAP window api the platform attaches with (X11/Win32/Cocoa).
