@@ -2410,18 +2410,9 @@ void ClapAsVst3::detachPosixFD(Steinberg::Linux::IRunLoop *r)
 
 void ClapAsVst3::firePosixFDIsSet(int fd)
 {
-  // The flags in force now, not at registration: modify_fd may have changed
-  // them since. Readability only -- the run loop reports nothing else, and
-  // never failure (runloop_fd.h).
-  for (auto &p : _posixFDObjects)
-  {
-    if (p.fd == fd)
-    {
-      if (const auto events = clap_wrapper_runloop_fd_events(p.flags))
-        _plugin->_ext._posixfd->on_fd(_plugin->_plugin, fd, events);
-      return;
-    }
-  }
+  // From the flags in force now, not at registration (runloop_fd.h).
+  if (const auto events = clap_wrapper_runloop_fd_wakeup(_posixFDObjects, fd))
+    _plugin->_ext._posixfd->on_fd(_plugin->_plugin, fd, events);
 }
 #endif
 
